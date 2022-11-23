@@ -22,6 +22,7 @@ func (cc *LogContent) Json() []byte {
 	if cc == nil {
 		return []byte("")
 	}
+	cc.Level = levels[cc.LevelInt]
 	var s bytes.Buffer
 	b, _ := json.Marshal(&cc)
 	if cc.Color {
@@ -49,7 +50,10 @@ func (cc *LogContent) Text() []byte {
 	}
 	s.WriteString(cc.Time)
 	s.WriteByte(' ')
+
+	s.WriteString("[")
 	s.WriteString(levels[cc.LevelInt])
+	s.WriteString("]")
 	s.WriteByte(' ')
 	s.WriteString(cc.File)
 	s.WriteString(": ")

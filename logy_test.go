@@ -3,7 +3,7 @@ package logx
 import "testing"
 
 func init() {
-	std.SetJsonFormat(true).SetColor(true)
+	//std.SetJsonFormat(true).SetColor(true)
 }
 
 func BenchmarkInfo(b *testing.B) {

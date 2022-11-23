@@ -66,15 +66,26 @@ var (
 		LevelFatal:  "\033[1;36m", //青蓝色
 	}
 
+	smallLevels = []string{
+		"T",
+		"D",
+		"I",
+		"N",
+		"W",
+		"E",
+		"P",
+		"F",
+	}
+
 	levels = []string{
-		"[T]",
-		"[D]",
-		"[I]",
-		"[N]",
-		"[W]",
-		"[E]",
-		"[P]",
-		"[F]",
+		"TEST",
+		"DEBU",
+		"INFO",
+		"NOTI",
+		"WARN",
+		"ERRO",
+		"PANI",
+		"FATA",
 	}
 )
 
@@ -94,7 +105,8 @@ const (
 //	call logx.New() returns *Logger
 type Logger struct {
 	w         io.Writer
-	pool      *sync.Pool
+	ccPool    *sync.Pool
+	bufPool   *sync.Pool
 	level     int
 	flag      int
 	callDepth int
@@ -115,9 +127,14 @@ func New(writer ...io.Writer) *Logger {
 		level:     0,
 		w:         w,
 		callDepth: 2,
-		pool: &sync.Pool{
+		ccPool: &sync.Pool{
 			New: func() interface{} {
 				return new(LogContent)
+			},
+		},
+		bufPool: &sync.Pool{
+			New: func() interface{} {
+				return bytes.NewBuffer(nil)
 			},
 		},
 	}
@@ -232,7 +249,6 @@ func (log *Logger) output(level int, msg string) {
 		now  = time.Now()
 		name string
 		line int
-		s    bytes.Buffer
 	)
 	if log.flag&(LogShortFile|LogLongFile) != 0 {
 		ok := false
@@ -243,7 +259,8 @@ func (log *Logger) output(level int, msg string) {
 		}
 	}
 
-	cc := log.pool.Get().(*LogContent)
+	cc := log.ccPool.Get().(*LogContent)
+	s := log.bufPool.Get().(*bytes.Buffer)
 	cc.Color = log.color
 
 	if log.prefix != "" {
@@ -290,11 +307,8 @@ func (log *Logger) output(level int, msg string) {
 		s.WriteString(strconv.FormatInt(int64(line), 10))
 		cc.File = s.String()
 	}
-
 	cc.Msg = msg
-
 	s.Reset()
-
 	switch log.logFormat {
 	case LogFormatText:
 		s.Write(cc.Text())
@@ -305,28 +319,7 @@ func (log *Logger) output(level int, msg string) {
 	}
 	s.WriteByte('\n')
 	_, _ = log.w.Write(s.Bytes())
-	log.pool.Put(cc)
-}
 
-/*
-private
-*/
-func formatWrite(buffer *bytes.Buffer, i int, wid int) {
-	var u = uint(i)
-	if u == 0 && wid <= 1 {
-		buffer.WriteByte('0')
-		return
-	}
-	var b [32]byte
-	bp := len(b)
-	for ; u > 0 || wid > 0; u /= 10 {
-		bp--
-		wid--
-		b[bp] = byte(u%10) + '0'
-	}
-
-	for bp < len(b) {
-		buffer.WriteByte(b[bp])
-		bp++
-	}
+	log.ccPool.Put(cc)
+	log.bufPool.Put(s)
 }
