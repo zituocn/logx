@@ -7,13 +7,13 @@ import (
 
 // LogContent 日志输出格式
 type LogContent struct {
-	Prefix  string `json:"prefix"`
-	Level   int    `json:"level"`
-	Package string `json:"package"`
-	File    string `json:"file"`
-	Msg     string `json:"msg"`
-	Time    string `json:"time"`
-	Color   bool   `json:"-"`
+	Prefix   string `json:"prefix"`
+	Time     string `json:"time"`
+	Level    string `json:"level"`
+	File     string `json:"file"`
+	Msg      string `json:"msg"`
+	Color    bool   `json:"-"`
+	LevelInt int    `json:"-"`
 }
 
 // Json LogContent to json
@@ -25,7 +25,7 @@ func (cc *LogContent) Json() []byte {
 	var s bytes.Buffer
 	b, _ := json.Marshal(&cc)
 	if cc.Color {
-		s.WriteString(logColor[cc.Level])
+		s.WriteString(logColor[cc.LevelInt])
 	}
 	s.Write(b)
 	if cc.Color {
@@ -39,7 +39,7 @@ func (cc *LogContent) Json() []byte {
 func (cc *LogContent) Text() []byte {
 	var s bytes.Buffer
 	if cc.Color {
-		s.WriteString(logColor[cc.Level])
+		s.WriteString(logColor[cc.LevelInt])
 	}
 	if cc.Prefix != "" {
 		s.WriteString("[")
@@ -49,7 +49,7 @@ func (cc *LogContent) Text() []byte {
 	}
 	s.WriteString(cc.Time)
 	s.WriteByte(' ')
-	s.WriteString(levels[cc.Level])
+	s.WriteString(levels[cc.LevelInt])
 	s.WriteByte(' ')
 	s.WriteString(cc.File)
 	s.WriteString(": ")

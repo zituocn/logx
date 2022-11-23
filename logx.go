@@ -242,6 +242,7 @@ func (log *Logger) output(level int, msg string) {
 			line = 0
 		}
 	}
+
 	cc := log.pool.Get().(*LogContent)
 	cc.Color = log.color
 
@@ -267,17 +268,16 @@ func (log *Logger) output(level int, msg string) {
 			s.WriteString(":")
 			s.WriteString(strconv.FormatInt(int64(sec), 10))
 			if log.flag&LogMicroSeconds != 0 {
+				s.WriteString(".")
 				s.WriteString(strconv.FormatInt(int64(now.Nanosecond()/1e6), 10))
 			}
 		}
 		cc.Time = s.String()
 	}
 	if log.flag&LogLevel != 0 {
-		cc.Level = level
+		cc.LevelInt = level
 	}
-	if log.flag&LogModule != 0 {
-		cc.Package = moduleOf(name)
-	}
+
 	// filename and line
 	if log.flag&(LogShortFile|LogLongFile) != 0 {
 		s.Reset()
@@ -329,16 +329,4 @@ func formatWrite(buffer *bytes.Buffer, i int, wid int) {
 		buffer.WriteByte(b[bp])
 		bp++
 	}
-}
-
-func moduleOf(file string) string {
-	pos := strings.LastIndex(file, "/")
-	if pos != -1 {
-		pos1 := strings.LastIndex(file[:pos], "/src/")
-		if pos1 != -1 {
-			return file[pos1+5 : pos]
-		}
-	}
-
-	return "UNKNOWN"
 }
