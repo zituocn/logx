@@ -2,10 +2,15 @@ package logx
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+)
+
+const (
+	nextSecond = 3600
 )
 
 type StorageType int
@@ -58,7 +63,7 @@ type FileOptions struct {
 	Prefix string
 
 	// date 日期
-	data string
+	date string
 }
 
 // FileWriter 文件存储实现
@@ -75,20 +80,22 @@ func NewFileWriter(opts ...FileOptions) *FileWriter {
 		FileOptions: opt,
 		mu:          &sync.Mutex{},
 	}
+	w.initFile()
+	go w.clearLogFile()
+	go w.startTimer()
 	return w
 }
 
 func (w *FileWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.initFile()
 	return w.file.Write(p)
 }
 
 func (w *FileWriter) initFile() {
 	now := time.Now()
 	date := now.Format(w.StorageType.getFileFormat())
-	if w.data != date && w.file != nil {
+	if w.date != date && w.file != nil {
 		_ = w.file.Close()
 		w.file = nil
 	}
@@ -104,8 +111,73 @@ func (w *FileWriter) initFile() {
 			panic(errO)
 		}
 		w.file = file
-		w.data = date
+		w.date = date
 	}
+}
+
+func (w *FileWriter) startTimer() {
+	now := time.Now()
+	nextTime := now.Add(nextSecond * time.Second)
+	second := time.Duration(nextTime.Sub(now).Seconds())
+	w.timer(second)
+}
+
+func (w *FileWriter) timer(second time.Duration) {
+	timer := time.NewTicker(second * time.Second)
+	for {
+		select {
+		case <-timer.C:
+			{
+				w.clearLogFile()
+				nextTimer := time.NewTicker(nextSecond * time.Second)
+				for {
+					select {
+					case <-nextTimer.C:
+						w.startTimer()
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+func (w *FileWriter) clearLogFile() {
+	now := time.Now()
+	files := getDirFiles(w.Dir)
+	for _, item := range files {
+		modTime := item.ModTime
+		flag := modTime.Add(time.Hour * 24 * time.Duration(w.MaxDay-1)).Before(now)
+		if flag {
+			_ = os.Remove(w.Dir + item.Name)
+		}
+	}
+}
+
+// FileInfo file info
+type FileInfo struct {
+	Name    string
+	ModTime time.Time
+	Size    int64
+}
+
+// getDirFiles return log files
+func getDirFiles(path string) (files []*FileInfo) {
+	dir, err := ioutil.ReadDir(path)
+	if err != nil {
+		return
+	}
+	files = make([]*FileInfo, 0)
+	for _, fi := range dir {
+		if !fi.IsDir() {
+			files = append(files, &FileInfo{
+				Name:    fi.Name(),
+				ModTime: fi.ModTime(),
+				Size:    fi.Size(),
+			})
+		}
+	}
+	return
 }
 
 func prepareFileWriterOption(opts []FileOptions) FileOptions {

@@ -111,3 +111,73 @@ func main() {
 
 ---
 ## 2. 同时写日志到文件
+
+### 2.1 使用 `logx`的 `FileWriter`
+
+```go
+package main
+
+import (
+	"io"
+	"os"
+	"time"
+
+	"github.com/zituocn/logx"
+)
+
+func init() {
+	logx.SetWriter(io.MultiWriter(
+		os.Stdout,
+		logx.NewFileWriter(logx.FileOptions{
+			StorageType: logx.StorageTypeDay,
+			MaxDay:      7,
+			Dir:         "./logs",
+			Prefix:      "web",
+		}))).SetColor(false)
+}
+
+func main() {
+	logx.Infof("这是一个字串: %s", time.Now())
+	logx.Debugf("这是一个对象: %#v", time.Now())
+}
+```
+**代码说明**：
+
+1. `logx.SetWriter` 时，使用了` io.MultiWriter`
+2. 把日志输出到了`os.Stdout` 和`logx.FileWriter`
+3. 设置不显示颜色 `SetColor(false)`
+
+
+### 2.2 自己设计一个io.Writer
+
+
+可以自己设计一个实现了 `io.Writer` ，由 `logx.SetWriter` 传入，可以是文件或网络。
+
+
+```go
+package main
+
+import (
+	"github.com/zituocn/logx"
+	"io"
+	"os"
+	"time"
+)
+
+func init() {
+	myWriter, err := os.OpenFile("./my_log_file.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0664)
+	if err != nil {
+		panic(err)
+	}
+	logx.SetWriter(io.MultiWriter(
+		os.Stdout,
+		myWriter,
+	)).SetColor(false)
+}
+
+func main() {
+	logx.Infof("这是一个字串: %s", time.Now())
+	logx.Debugf("这是一个对象: %#v", time.Now())
+}
+
+```
