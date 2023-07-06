@@ -5,7 +5,29 @@ import (
 	"encoding/json"
 )
 
-// LogContent 日志输出格式
+// LogFormat logformat enum
+type (
+	DateFormat int
+	FileFormat int
+)
+
+const (
+	LongDateFormat DateFormat = iota
+	ShortDateFormat
+)
+
+const (
+	LongFileFormat FileFormat = iota
+
+	ShortFileFormat
+)
+
+type LogOptions struct {
+	logFormat  LogFormat
+	dateFormat DateFormat
+	fileFormat FileFormat
+}
+
 type LogContent struct {
 	Prefix   string `json:"prefix"`
 	Time     string `json:"time"`

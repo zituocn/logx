@@ -13,26 +13,18 @@ import (
 )
 
 const (
-
-	// LogDate 日期
 	LogDate = 1 << iota
 
-	// LogTime 时间
 	LogTime
 
-	// LogMicroSeconds ms
 	LogMicroSeconds
 
-	// LogLongFile 完整文件名
 	LogLongFile
 
-	// LogShortFile 较短的文件名
 	LogShortFile
 
-	// LogModule 包名
 	LogModule
 
-	// LogLevel 日志等级
 	LogLevel
 )
 
@@ -52,18 +44,18 @@ const (
 )
 
 var (
-	// StdFlags 标准输出的格式
+	// StdFlags std flags
 	StdFlags = LogDate | LogMicroSeconds | LogShortFile | LogLevel
 
 	logColor = []string{
-		LevelTest:   "\033[1;37m", //白色
-		LevelInfo:   "\033[1;37m", //白色
-		LevelDebug:  "\033[1;34m", //蓝色
-		LevelNotice: "\033[1;33m", //黄色
-		LevelWarn:   "\033[1;32m", //绿色
-		LevelError:  "\033[1;31m", //红色
-		LevelPanic:  "\033[1;35m", //紫红色
-		LevelFatal:  "\033[1;36m", //青蓝色
+		LevelTest:   "\033[1;37m", //white
+		LevelInfo:   "\033[1;37m", //white
+		LevelDebug:  "\033[1;34m", //blue
+		LevelNotice: "\033[1;33m", //yellow
+		LevelWarn:   "\033[1;32m", //green
+		LevelError:  "\033[1;31m", //red
+		LevelPanic:  "\033[1;35m", //fuchsia
+		LevelFatal:  "\033[1;36m", //cyan
 	}
 
 	smallLevels = []string{
@@ -116,6 +108,7 @@ type Logger struct {
 }
 
 // New logx.New(...)
+//	logx.New()
 //	returns *Logger
 func New(writer ...io.Writer) *Logger {
 	var w io.Writer
@@ -244,6 +237,10 @@ func (log *Logger) Fatal(format string, v ...interface{}) {
 	os.Exit(-1)
 }
 
+/*
+private
+*/
+
 func (log *Logger) output(level int, msg string) {
 	var (
 		now  = time.Now()
@@ -270,23 +267,23 @@ func (log *Logger) output(level int, msg string) {
 		s.Reset()
 		if log.flag&LogDate != 0 {
 			year, month, day := now.Date()
-			s.WriteString(strconv.FormatInt(int64(year), 10))
+			s.WriteString(formatNum(year, 2))
 			s.WriteString("/")
-			s.WriteString(strconv.FormatInt(int64(month), 10))
+			s.WriteString(formatNum(int(month), 2))
 			s.WriteString("/")
-			s.WriteString(strconv.FormatInt(int64(day), 10))
+			s.WriteString(formatNum(day, 2))
 			s.WriteString(" ")
 		}
 		if log.flag&(LogTime|LogMicroSeconds) != 0 {
 			hour, min, sec := now.Clock()
-			s.WriteString(strconv.FormatInt(int64(hour), 10))
+			s.WriteString(formatNum(hour, 2))
 			s.WriteString(":")
-			s.WriteString(strconv.FormatInt(int64(min), 10))
+			s.WriteString(formatNum(min, 2))
 			s.WriteString(":")
-			s.WriteString(strconv.FormatInt(int64(sec), 10))
+			s.WriteString(formatNum(sec, 2))
 			if log.flag&LogMicroSeconds != 0 {
 				s.WriteString(".")
-				s.WriteString(strconv.FormatInt(int64(now.Nanosecond()/1e6), 10))
+				s.WriteString(formatNum(now.Nanosecond()/1e6, 3))
 			}
 		}
 		cc.Time = s.String()
@@ -322,4 +319,22 @@ func (log *Logger) output(level int, msg string) {
 
 	log.ccPool.Put(cc)
 	log.bufPool.Put(s)
+}
+
+func formatNum(i int, need int) string {
+	s := strconv.FormatInt(int64(i), 10)
+	if s == "" {
+		return ""
+	}
+	c := need - len(s)
+	switch c {
+	case 1:
+		return "0" + s
+	case 2:
+		return "00" + s
+	case 4:
+		return "000" + s
+	}
+
+	return s
 }
