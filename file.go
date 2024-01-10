@@ -2,6 +2,7 @@ package logx
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -162,18 +163,17 @@ type FileInfo struct {
 
 // getDirFiles return log files
 func getDirFiles(path string) (files []*FileInfo) {
-	dir, err := os.ReadDir(path)
+	dir, err := ioutil.ReadDir(path)
 	if err != nil {
 		return
 	}
 	files = make([]*FileInfo, 0)
 	for _, fi := range dir {
-		info, _ := fi.Info()
 		if !fi.IsDir() {
 			files = append(files, &FileInfo{
 				Name:    fi.Name(),
-				ModTime: info.ModTime(),
-				Size:    info.Size(),
+				ModTime: fi.ModTime(),
+				Size:    fi.Size(),
 			})
 		}
 	}
