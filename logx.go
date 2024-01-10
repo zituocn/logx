@@ -94,6 +94,7 @@ const (
 )
 
 // Logger logger struct
+//
 //	call logx.New() returns *Logger
 type Logger struct {
 	w         io.Writer
@@ -108,7 +109,7 @@ type Logger struct {
 }
 
 // New logx.New(...)
-//	logx.New()
+//
 //	returns *Logger
 func New(writer ...io.Writer) *Logger {
 	var w io.Writer
@@ -134,6 +135,7 @@ func New(writer ...io.Writer) *Logger {
 }
 
 // SetWriter set io.writer
+//
 //	returns *Logger
 func (log *Logger) SetWriter(w io.Writer) *Logger {
 	log.w = w
@@ -141,14 +143,15 @@ func (log *Logger) SetWriter(w io.Writer) *Logger {
 }
 
 // SetPrefix set *Logger's prefix
+//
 //	returns *Logger
 func (log *Logger) SetPrefix(prefix string) *Logger {
 	log.prefix = prefix
 	return log
 }
 
-//	SetFlag set *Logger's flag
-//	returns *Logger
+// SetFlag set *Logger's flag
+// returns *Logger
 func (log *Logger) SetFlag(flag int) *Logger {
 	log.flag = flag
 	return log
@@ -165,6 +168,7 @@ func (log *Logger) SetColor(color bool) *Logger {
 }
 
 // SetFormat set log format
+//
 //	text or json or other
 func (log *Logger) SetFormat(logFormat LogFormat) *Logger {
 	log.logFormat = logFormat

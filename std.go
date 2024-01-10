@@ -25,7 +25,7 @@ func SetWriter(w io.Writer) *Logger {
 }
 
 // Info info v
-//	logy.Info("test")
+//	logx.Info("test")
 func Info(v ...interface{}) {
 	std.Info(getFormat(len(v)), v...)
 }

@@ -2,7 +2,6 @@ package logx
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -80,7 +79,6 @@ func NewFileWriter(opts ...FileOptions) *FileWriter {
 		FileOptions: opt,
 		mu:          &sync.Mutex{},
 	}
-	w.initFile()
 	go w.clearLogFile()
 	go w.startTimer()
 	return w
@@ -89,6 +87,7 @@ func NewFileWriter(opts ...FileOptions) *FileWriter {
 func (w *FileWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.initFile()
 	return w.file.Write(p)
 }
 
@@ -163,17 +162,18 @@ type FileInfo struct {
 
 // getDirFiles return log files
 func getDirFiles(path string) (files []*FileInfo) {
-	dir, err := ioutil.ReadDir(path)
+	dir, err := os.ReadDir(path)
 	if err != nil {
 		return
 	}
 	files = make([]*FileInfo, 0)
 	for _, fi := range dir {
+		info, _ := fi.Info()
 		if !fi.IsDir() {
 			files = append(files, &FileInfo{
 				Name:    fi.Name(),
-				ModTime: fi.ModTime(),
-				Size:    fi.Size(),
+				ModTime: info.ModTime(),
+				Size:    info.Size(),
 			})
 		}
 	}
