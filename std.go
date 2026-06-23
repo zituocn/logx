@@ -1,9 +1,9 @@
 package logx
 
 import (
-	"bytes"
 	"io"
 	"os"
+	"strings"
 )
 
 var std *Logger
@@ -92,9 +92,5 @@ func Fatalf(format string, v ...interface{}) {
 
 // getFormat returns format string
 func getFormat(length int) string {
-	buffer := &bytes.Buffer{}
-	for i := 0; i < length; i++ {
-		buffer.WriteString("%v")
-	}
-	return buffer.String()
+	return strings.Repeat("%v", length)
 }

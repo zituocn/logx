@@ -238,7 +238,7 @@ func (log *Logger) Fatal(format string, v ...interface{}) {
 		return
 	}
 	log.output(LevelFatal, fmt.Sprintf(format, v...))
-	os.Exit(-1)
+	os.Exit(1)
 }
 
 /*

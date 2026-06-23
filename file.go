@@ -2,180 +2,173 @@ package logx
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
 
-const (
-	nextSecond = 3600
-)
-
 type StorageType int
 
 const (
-
-	// StorageTypeMinutes 按分钟存储
 	StorageTypeMinutes StorageType = iota
-
-	// StorageTypeHour 按小时存储
 	StorageTypeHour
-
-	// StorageTypeDay 按天存储
 	StorageTypeDay
-
-	// StorageTypeMonth 按月存储
 	StorageTypeMonth
 )
 
-var (
-	formats = map[StorageType]string{
-		StorageTypeMinutes: "2006-01-02-15-04",
-		StorageTypeHour:    "2006-01-02-15",
-		StorageTypeDay:     "2006-01-02",
-		StorageTypeMonth:   "2006-01",
-	}
+var formats = map[StorageType]string{
+	StorageTypeMinutes: "2006-01-02-15-04",
+	StorageTypeHour:    "2006-01-02-15",
+	StorageTypeDay:     "2006-01-02",
+	StorageTypeMonth:   "2006-01",
+}
 
-	// defaultMaxDay 日志文件的默认最大保存天数
-	// 7天之外的文件，会被自动清理
-	defaultMaxDay = 7
-)
+var defaultMaxDay = 7
 
 func (s StorageType) getFileFormat() string {
 	return formats[s]
 }
 
-// FileOptions 文件存储选项
 type FileOptions struct {
-
-	// StorageType 存储的时间类型
 	StorageType StorageType
-
-	// MaxDay 日志最大保存天数
-	MaxDay int
-
-	// Dir 日志保存目录
-	Dir string
-
-	// Prefix 文件名前缀
-	Prefix string
-
-	// date 日期
-	date string
+	MaxDay      int
+	Dir         string
+	Prefix      string
 }
 
-// FileWriter 文件存储实现
 type FileWriter struct {
-	file *os.File
-	mu   *sync.Mutex
-
+	file   *os.File
+	mu     sync.Mutex
+	closed bool
+	stopCh chan struct{} // 通知后台 goroutine 退出
 	FileOptions
+	date string
 }
 
 func NewFileWriter(opts ...FileOptions) *FileWriter {
 	opt := prepareFileWriterOption(opts)
 	w := &FileWriter{
 		FileOptions: opt,
-		mu:          &sync.Mutex{},
+		stopCh:      make(chan struct{}),
 	}
-	go w.clearLogFile()
-	go w.startTimer()
+	go w.run() // 单一后台 goroutine 处理清理 + 轮转
 	return w
+}
+
+// run 单一 goroutine，每小时检查一次
+func (w *FileWriter) run() {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			w.mu.Lock()
+			w.clearExpiredFiles()
+			w.tryRotate()
+			w.mu.Unlock()
+		case <-w.stopCh:
+			return
+		}
+	}
+}
+
+// Close 安全关闭 FileWriter，flush 并停止后台 goroutine
+func (w *FileWriter) Close() error {
+	close(w.stopCh)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.closed = true
+	if w.file != nil {
+		return w.file.Close()
+	}
+	return nil
 }
 
 func (w *FileWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.initFile()
+	if w.closed {
+		return 0, os.ErrClosed
+	}
+	w.initFileLocked()
 	return w.file.Write(p)
 }
 
-func (w *FileWriter) initFile() {
-	now := time.Now()
-	date := now.Format(w.StorageType.getFileFormat())
-	if w.date != date && w.file != nil {
+func (w *FileWriter) initFileLocked() {
+	date := time.Now().Format(w.StorageType.getFileFormat())
+	if w.date == date && w.file != nil {
+		return // 文件正确，无需操作
+	}
+	// 日期变化，关闭旧文件
+	if w.file != nil {
 		_ = w.file.Close()
 		w.file = nil
 	}
-	if w.file == nil {
-		dir := filepath.Dir(w.Dir)
-		err := os.MkdirAll(dir, 755)
-		if err != nil {
-			panic(err)
-		}
-		fileName := fmt.Sprintf("%s.%s.log", w.Prefix, date)
-		file, errO := os.OpenFile(filepath.Join(w.Dir, fileName), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0664)
-		if errO != nil {
-			panic(errO)
-		}
-		w.file = file
-		w.date = date
+	dir := filepath.Dir(w.Dir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		panic(err)
+	}
+	fileName := fmt.Sprintf("%s.%s.log", w.Prefix, date)
+	// 使用 filepath.Join 拼接路径
+	fullPath := filepath.Join(w.Dir, fileName)
+	file, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0664)
+	if err != nil {
+		panic(err)
+	}
+	w.file = file
+	w.date = date
+}
+
+// tryRotate 按日期轮转（由定时器触发）
+func (w *FileWriter) tryRotate() {
+	date := time.Now().Format(w.StorageType.getFileFormat())
+	if w.date != date && w.file != nil {
+		_ = w.file.Close()
+		w.file = nil
+		w.date = ""
 	}
 }
 
-func (w *FileWriter) startTimer() {
-	now := time.Now()
-	nextTime := now.Add(nextSecond * time.Second)
-	second := time.Duration(nextTime.Sub(now).Seconds())
-	w.timer(second)
-}
-
-func (w *FileWriter) timer(second time.Duration) {
-	timer := time.NewTicker(second * time.Second)
-	for {
-		select {
-		case <-timer.C:
-			{
-				w.clearLogFile()
-				nextTimer := time.NewTicker(nextSecond * time.Second)
-				for {
-					select {
-					case <-nextTimer.C:
-						w.startTimer()
-						return
-					}
-				}
-			}
-		}
-	}
-}
-
-func (w *FileWriter) clearLogFile() {
-	now := time.Now()
+// clearExpiredFiles 清理过期文件（调用方需持锁）
+func (w *FileWriter) clearExpiredFiles() {
 	files := getDirFiles(w.Dir)
+	now := time.Now()
+	maxDur := time.Hour * 24 * time.Duration(w.MaxDay-1)
 	for _, item := range files {
-		modTime := item.ModTime
-		flag := modTime.Add(time.Hour * 24 * time.Duration(w.MaxDay-1)).Before(now)
-		if flag {
-			_ = os.Remove(w.Dir + item.Name)
+		if item.ModTime.Add(maxDur).Before(now) {
+			// 使用 filepath.Join
+			_ = os.Remove(filepath.Join(w.Dir, item.Name))
 		}
 	}
 }
 
-// FileInfo file info
+// FileInfo 文件信息
 type FileInfo struct {
 	Name    string
 	ModTime time.Time
 	Size    int64
 }
 
-// getDirFiles return log files
+// getDirFiles 返回目录下所有非目录文件（使用 os.ReadDir 替代 ioutil.ReadDir）
 func getDirFiles(path string) (files []*FileInfo) {
-	dir, err := ioutil.ReadDir(path)
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		return
 	}
-	files = make([]*FileInfo, 0)
-	for _, fi := range dir {
-		if !fi.IsDir() {
-			files = append(files, &FileInfo{
-				Name:    fi.Name(),
-				ModTime: fi.ModTime(),
-				Size:    fi.Size(),
-			})
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
 		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, &FileInfo{
+			Name:    entry.Name(),
+			ModTime: info.ModTime(),
+			Size:    info.Size(),
+		})
 	}
 	return
 }
@@ -191,7 +184,8 @@ func prepareFileWriterOption(opts []FileOptions) FileOptions {
 	if opt.MaxDay <= 0 {
 		opt.MaxDay = defaultMaxDay
 	}
-	if opt.Dir[len(opt.Dir)-1:] != "/" {
+	// 确保 Dir 以路径分隔符结尾
+	if len(opt.Dir) > 0 && opt.Dir[len(opt.Dir)-1] != '/' {
 		opt.Dir = opt.Dir + "/"
 	}
 	return opt
